@@ -21,9 +21,9 @@ RoboClaw motor_control(&Serial2,10000);
 
 ros::NodeHandle arduinoNode;
 
-#define LSM9DS1_M 0x0E; //Magnetometer address
+#define LSM9DS1_M 0x1E; //Magnetometer address
 #define LSM9DS1_AG 0x6B; //Accelerometer and gyro address
-#define DECLINATION -9.19;
+#define DECLINATION -9.19
 #define mc_address 0x81
 
 
@@ -48,11 +48,11 @@ void motor_com_cb(const geometry_msgs::Twist& in_msg)
   }
   if(in_msg.angular.z<0)
   {
-    motor_control.TurnLeftMixed(mc_address, (int)-1*in_msg.angular.z*64);
+    motor_control.TurnLeftMixed(mc_address, (int)-1*in_msg.angular.z*30);
   }
   if(in_msg.angular.z>0)
   {
-    motor_control.TurnRightMixed(mc_address, (int)in_msg.angular.z*64);
+    motor_control.TurnRightMixed(mc_address, (int)in_msg.angular.z*30);
   }
   if(in_msg.angular.z==0&&in_msg.linear.x==0)
   {
@@ -64,7 +64,7 @@ void motor_com_cb(const geometry_msgs::Twist& in_msg)
 
 ros::Subscriber <geometry_msgs::Twist> input_from_pc("cmd_vel",&motor_com_cb);
 /************** Arduino Specific *********************/
-
+PID test;
 void setup() {
   // ROS Initialization
   arduinoNode.initNode();
@@ -76,9 +76,12 @@ void setup() {
   imu.settings.device.commInterface = IMU_MODE_I2C;
   imu.settings.device.mAddress=LSM9DS1_M;
   imu.settings.device.agAddress=LSM9DS1_AG;
-  imu.begin();
-  IMU_Data.imu_ready=1;
-
+  if (!imu.begin())
+  {
+    IMU_Data.imu_ready=1;
+    while(1)
+    ;
+  }
 }
 
 
@@ -101,9 +104,23 @@ void readgyro()
 void readmag()
 {
    imu.readMag();
-  IMU_Data.mag.x=imu.calcMag(imu.mx);
+  float heading;
+  if (imu.my == 0)
+    heading = (imu.mx < 0) ? 180.0 : 0;
+  else
+    heading = atan2(-imu.mx, -imu.my);
+    
+  heading -= (DECLINATION / 180)* PI ;
+  
+  if (heading > PI) heading -= (2 * PI);
+  else if (heading < -PI) heading += (2 * PI);
+  else if (heading < 0) heading += 2 * PI;
+  heading *= 180.0 / PI;
+
+  IMU_Data.mag.x=heading;
   IMU_Data.mag.y=imu.calcMag(imu.my);
   IMU_Data.mag.z=imu.calcMag(imu.mz);
+  
 }
 
 void loop() {
@@ -123,8 +140,9 @@ void loop() {
       GPS_Data.longitude=long_l;
       GPS_Data.fix_time=fix_time_l;
       GPS_Data.sats=sats;
-      GPS_Data.speed_val=speed_val;
+      
     }
+    GPS_Data.speed_val=c;
   }
   readaccel();
   readgyro();
