@@ -10,6 +10,7 @@
 #include <gps_msgs/Gyro_msg.h>
 #include <gps_msgs/Mag_msg.h>
 #include <TinyGPS.h>
+#include "PID.h"
 //#include <SoftwareSerial.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -29,12 +30,15 @@ ros::NodeHandle arduinoNode;
 
 TinyGPS gps;  
 LSM9DS1 imu;
+long oldTime=millis();
 
 gps_msgs::GPS_msg GPS_Data;
 gps_msgs::IMU_msg IMU_Data;
+//geometry_msgs::Twist vel_data;
 
 ros::Publisher GPS_pub("gps_data",&GPS_Data);
 ros::Publisher IMU_pub("imu_data",&IMU_Data);
+//ros::Publisher vel_pub("cmd_vel",&vel_data);
 
 void motor_com_cb(const geometry_msgs::Twist& in_msg)
 {
@@ -48,28 +52,28 @@ void motor_com_cb(const geometry_msgs::Twist& in_msg)
   }
   if(in_msg.angular.z<0)
   {
-    motor_control.TurnLeftMixed(mc_address, (int)-1*in_msg.angular.z*30);
+    motor_control.TurnLeftMixed(mc_address, -1*(int)in_msg.angular.z*(int)in_msg.linear.z);
   }
   if(in_msg.angular.z>0)
   {
-    motor_control.TurnRightMixed(mc_address, (int)in_msg.angular.z*30);
+    motor_control.TurnRightMixed(mc_address, (int)in_msg.angular.z*(int)in_msg.linear.z);
   }
   if(in_msg.angular.z==0&&in_msg.linear.x==0)
   {
     motor_control.ForwardMixed(mc_address, 0);
     motor_control.TurnRightMixed(mc_address, 0);
   }
-  GPS_Data.speed_val=in_msg.linear.x;
 }
 
 ros::Subscriber <geometry_msgs::Twist> input_from_pc("cmd_vel",&motor_com_cb);
 /************** Arduino Specific *********************/
-PID test;
+PID test=PID(0,10,0.1,0,0,40,-40);
 void setup() {
   // ROS Initialization
   arduinoNode.initNode();
   arduinoNode.advertise(GPS_pub);
-  arduinoNode.advertise(IMU_pub);
+  arduinoNode.advertise(IMU_pub);  
+//  arduinoNode.advertise(vel_pub);
   arduinoNode.subscribe(input_from_pc);
   Serial1.begin(9600);
   motor_control.begin(38400);
@@ -118,9 +122,20 @@ void readmag()
   heading *= 180.0 / PI;
 
   IMU_Data.mag.x=heading;
-  IMU_Data.mag.y=imu.calcMag(imu.my);
+  //IMU_Data.mag.y=imu.calcMag(imu.my);
   IMU_Data.mag.z=imu.calcMag(imu.mz);
-  
+  float elapsedTime=(float)(millis()-oldTime);
+  oldTime=millis();
+  float newSpeed=test.getNewValue(heading,40,elapsedTime);
+  IMU_Data.mag.y=newSpeed;
+  if(newSpeed>=0)
+  {    
+    motor_control.TurnLeftMixed(mc_address, newSpeed);
+  }
+  else
+  {
+    motor_control.TurnLeftMixed(mc_address, -1*newSpeed);
+  }  
 }
 
 void loop() {
@@ -150,6 +165,7 @@ void loop() {
   IMU_pub.publish(&IMU_Data);
   /* Connent end point for keyboard teleop*/
   GPS_pub.publish(&GPS_Data);
+  //vel_pub.publish(&vel_data);
   arduinoNode.spinOnce();
   delay(100);
 }

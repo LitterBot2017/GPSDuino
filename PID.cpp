@@ -6,6 +6,7 @@
  */
 
 #include "PID.h"
+#include "stdlib.h"
 
 using namespace std;
 
@@ -24,7 +25,7 @@ float PID::getNewValue(float currHeading, float desiredHeading,float elapsedTime
 {
 	float newTurnSpeed;
 	float error=desiredHeading-currHeading;
-	if(error<0.5)
+	if(abs(error)<10)
 	{
 		newTurnSpeed=0;
 		resetErrors();
