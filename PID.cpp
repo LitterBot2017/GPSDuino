@@ -29,6 +29,7 @@ float PID::getNewValue(float currHeading, float desiredHeading,float elapsedTime
 	{
 		newTurnSpeed=0;
 		resetErrors();
+    return 0;
 	}
 	float diffE=error-this->headingErrorOld;
 	this->integratedError=this->integratedError+error*elapsedTime;

@@ -1,4 +1,3 @@
-
 #include <ros.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int16.h>
@@ -67,7 +66,7 @@ void motor_com_cb(const geometry_msgs::Twist& in_msg)
 
 ros::Subscriber <geometry_msgs::Twist> input_from_pc("cmd_vel",&motor_com_cb);
 /************** Arduino Specific *********************/
-PID test=PID(0,10,0.1,0,0,40,-40);
+PID test=PID(0,10,0.01,0,0,10,-10);
 void setup() {
   // ROS Initialization
   arduinoNode.initNode();
